@@ -2,6 +2,7 @@ import 'dart:ffi';
 
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:xml/xml.dart';
 
 void main() {
   runApp(const MyApp());
@@ -56,13 +57,74 @@ class _MyHomePageState extends State<MyHomePage> {
       results.clear();
     } catch (e) {
       debugPrint("解析异常");
+
+      xmlToStruct(tmpText);
     }
     setState(() {});
   }
 
+  String xmlToStruct(String input, {String key = "请在这里输入Model名字"}) {
+    try {
+      var document = XmlDocument.parse(input);
+      results.add(xmlElementToStruct(
+          document.findElements("plist").first.findElements("dict").first));
+      result = results.join("\n");
+
+      setState(() {});
+      results.clear();
+    } catch (e) {}
+    return "";
+  }
+
+  String xmlElementToStruct(XmlElement element,
+      {String type = "请在这里输入Model名字"}) {
+    var model = "struct $type:Codable,Identifiable{\n";
+    for (var node1 in element.childElements) {
+      var keyText = node1.name.toString();
+
+      if (node1.nodeType == XmlNodeType.ELEMENT && "key" == keyText) {
+        var typeText = node1.nextElementSibling?.name.toString();
+        var keyNodeStr = node1.text;
+
+        if (typeText == "string") {
+          model += "    var $keyNodeStr : String";
+        } else if (typeText == "int") {
+          model += "    var $keyNodeStr : Int";
+        } else if (typeText == "true" || typeText == "false") {
+          model += "    var $keyNodeStr : Bool";
+        } else if (typeText == "double") {
+          model += "    var $keyNodeStr : Double";
+        } else if (typeText == "float") {
+          model += "    var $keyNodeStr : Float";
+        } else if (typeText == "dict") {
+          if (node1.nextElementSibling != null) {
+            var type = keyNodeStr.replaceRange(
+                0, 1, keyNodeStr.characters.first.toUpperCase());
+            model += "    var $keyNodeStr : $type";
+
+            results
+                .add(xmlElementToStruct(node1.nextElementSibling!, type: type));
+          }
+        } else if (typeText == "array") {
+          if (node1.nextElementSibling != null) {
+            var type = keyNodeStr.replaceRange(
+                0, 1, keyNodeStr.characters.first.toUpperCase());
+            model += "    var $keyNodeStr : [$type]";
+            results.add(xmlElementToStruct(
+                node1.nextElementSibling!.childElements.first,
+                type: type));
+          }
+        }
+        model += "\n";
+      }
+    }
+    model += "}\n";
+    return model;
+  }
+
   String convertToStruct(Map<String, dynamic> map,
-      {String key = "请在这里输入Model名字"}) {
-    var model = "struct $key:Codable,Identifiable{\n";
+      {String type = "请在这里输入Model名字"}) {
+    var model = "struct $type:Codable,Identifiable{\n";
 
     //foreach the map
     map.forEach((key, value) {
@@ -79,12 +141,12 @@ class _MyHomePageState extends State<MyHomePage> {
       } else if (value is Map) {
         var type = key.replaceRange(0, 1, key.characters.first.toUpperCase());
         model += "    var $key : $type";
-        results.add(convertToStruct(value as Map<String, dynamic>, key: type));
+        results.add(convertToStruct(value as Map<String, dynamic>, type: type));
       } else if (value is List && value.isNotEmpty) {
         var type = key.replaceRange(0, 1, key.characters.first.toUpperCase());
-        model += "    var $key : $type";
+        model += "    var $key : [$type]";
         results.add(
-            convertToStruct(value.first as Map<String, dynamic>, key: type));
+            convertToStruct(value.first as Map<String, dynamic>, type: type));
       }
       model += "\n";
     });
