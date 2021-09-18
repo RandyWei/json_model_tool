@@ -155,7 +155,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String checkCodingKeys(List<String> list) {
     var codingKeysEnum = "";
     if (enableCodingKeys) {
-      codingKeysEnum = "\n    enum CodingKeys: String CodingKey {\n\n";
+      codingKeysEnum = "\n    enum CodingKeys: String, CodingKey {\n\n";
       for (var element in list) {
         codingKeysEnum += "        $element \n";
       }
