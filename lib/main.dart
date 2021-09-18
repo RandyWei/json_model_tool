@@ -34,9 +34,17 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   TextEditingController controller = TextEditingController();
   String result = "";
-  bool isFormat = false;
 
   List<String> results = [];
+
+  //是否启动驼峰
+  bool enableSmallHump = false;
+
+  //是否增加 coding keys
+  bool enableCodingKeys = false;
+
+  //是否增加 init 方法
+  bool enableInit = false;
 
   void formatAndConvert() {
     var tmpText = controller.value.text;
@@ -79,12 +87,15 @@ class _MyHomePageState extends State<MyHomePage> {
   String xmlElementToStruct(XmlElement element,
       {String type = "请在这里输入Model名字"}) {
     var model = "struct $type:Codable,Identifiable{\n";
+    List<String> codingKeysList = [];
     for (var node1 in element.childElements) {
       var keyText = node1.name.toString();
 
       if (node1.nodeType == XmlNodeType.ELEMENT && "key" == keyText) {
         var typeText = node1.nextElementSibling?.name.toString();
-        var keyNodeStr = node1.text;
+
+        var rawKey = node1.text;
+        var keyNodeStr = checkEnableHump(rawKey);
 
         if (typeText == "string") {
           model += "    var $keyNodeStr : String";
@@ -116,40 +127,92 @@ class _MyHomePageState extends State<MyHomePage> {
           }
         }
         model += "\n";
+
+        codingKeysList.add("case $keyNodeStr = \"$rawKey\" \n");
       }
     }
+
+    model += checkCodingKeys(codingKeysList);
     model += "}\n";
     return model;
+  }
+
+  String checkEnableHump(String rawKey) {
+    if (enableSmallHump) {
+      var keysByUnderLine = rawKey.split("_");
+      var mappingKey = keysByUnderLine
+          .map((e) => e.replaceRange(0, 1, e.characters.first.toUpperCase()))
+          .join("")
+          .toString();
+      mappingKey = mappingKey.replaceRange(
+          0, 1, mappingKey.characters.first.toLowerCase());
+      return mappingKey;
+    } else {
+      return rawKey;
+    }
+  }
+
+  String checkCodingKeys(List<String> list) {
+    var codingKeysEnum = "";
+    if (enableCodingKeys) {
+      codingKeysEnum = "\n    enum CodingKeys: String CodingKey {\n\n";
+      for (var element in list) {
+        codingKeysEnum += "        $element \n";
+      }
+      codingKeysEnum += "    }\n";
+    }
+    return codingKeysEnum;
   }
 
   String convertToStruct(Map<String, dynamic> map,
       {String type = "请在这里输入Model名字"}) {
     var model = "struct $type:Codable,Identifiable{\n";
+    List<String> codingKeysList = [];
 
     //foreach the map
     map.forEach((key, value) {
+      var mappingKey = checkEnableHump(key);
+
+      if (enableSmallHump) {
+        var keysByUnderLine = key.split("_");
+
+        mappingKey = keysByUnderLine
+            .map((e) => e.replaceRange(0, 1, e.characters.first.toUpperCase()))
+            .join("")
+            .toString();
+        mappingKey = mappingKey.replaceRange(
+            0, 1, mappingKey.characters.first.toLowerCase());
+      }
+
       if (value is String) {
-        model += "    var $key : String";
+        model += "    var $mappingKey : String";
       } else if (value is int) {
-        model += "    var $key : Int";
+        model += "    var $mappingKey : Int";
       } else if (value is bool) {
-        model += "    var $key : Bool";
+        model += "    var $mappingKey : Bool";
       } else if (value is double) {
-        model += "    var $key : Double";
+        model += "    var $mappingKey : Double";
       } else if (value is Float) {
-        model += "    var $key : Float";
+        model += "    var $mappingKey : Float";
       } else if (value is Map) {
-        var type = key.replaceRange(0, 1, key.characters.first.toUpperCase());
-        model += "    var $key : $type";
+        var type = mappingKey.replaceRange(
+            0, 1, mappingKey.characters.first.toUpperCase());
+        model += "    var $mappingKey : $type";
         results.add(convertToStruct(value as Map<String, dynamic>, type: type));
       } else if (value is List && value.isNotEmpty) {
-        var type = key.replaceRange(0, 1, key.characters.first.toUpperCase());
-        model += "    var $key : [$type]";
+        var type = mappingKey.replaceRange(
+            0, 1, mappingKey.characters.first.toUpperCase());
+        model += "    var $mappingKey : [$type]";
         results.add(
             convertToStruct(value.first as Map<String, dynamic>, type: type));
       }
       model += "\n";
+
+      codingKeysList.add("case $mappingKey = \"$key\" \n");
     });
+
+    model += checkCodingKeys(codingKeysList);
+
     model += "}\n";
 
     return model;
@@ -183,11 +246,42 @@ class _MyHomePageState extends State<MyHomePage> {
             height: double.infinity,
             color: Colors.purple[50],
             padding: const EdgeInsets.all(8.0),
-            child: UnconstrainedBox(
-              child: ElevatedButton(
-                child: const Text("Convert"),
-                onPressed: formatAndConvert,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Checkbox(
+                            value: enableSmallHump,
+                            onChanged: (value) {
+                              enableSmallHump = value ?? false;
+                              enableCodingKeys = value ?? false;
+                              setState(() {});
+                            }),
+                        const Text("Enable Hump"),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Checkbox(
+                            value: enableCodingKeys,
+                            onChanged: (value) {
+                              enableCodingKeys = value ?? false;
+                              setState(() {});
+                            }),
+                        const Text("CodingKeys"),
+                      ],
+                    ),
+                  ],
+                ),
+                ElevatedButton(
+                  child: const Text("Convert"),
+                  onPressed: formatAndConvert,
+                )
+              ],
             ),
           ),
           Expanded(
